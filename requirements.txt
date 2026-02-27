@@ -1,4 +1,3 @@
-mcp
-uvicorn
+fastmcp
 starlette
-httpx
+uvicorn
