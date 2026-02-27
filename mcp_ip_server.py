@@ -1,9 +1,9 @@
 from mcp.server import Server
-from mcp.server.streamable_http import StreamableHTTPServerTransport
+from mcp.server.sse import SseServerTransport
 from mcp.types import Tool, TextContent
 from starlette.applications import Starlette
 from starlette.requests import Request
-from starlette.routing import Route
+from starlette.routing import Route, Mount
 import uvicorn
 import contextvars
 
@@ -28,20 +28,22 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         return [TextContent(type="text", text=f"Your IP address is: {ip}")]
     raise ValueError(f"Unknown tool: {name}")
 
-async def handle_mcp(request: Request):
+sse = SseServerTransport("/messages/")
+
+async def handle_sse(request: Request):
     ip = (
         request.headers.get("x-forwarded-for", "").split(",")[0].strip()
         or request.headers.get("x-real-ip")
         or request.client.host
     )
     caller_ip.set(ip)
-    transport = StreamableHTTPServerTransport("/mcp")
-    async with transport.connect(request) as streams:
+    async with sse.connect_sse(request.scope, request.receive, request._send) as streams:
         await app.run(streams[0], streams[1], app.create_initialization_options())
 
 starlette_app = Starlette(
     routes=[
-        Route("/mcp", endpoint=handle_mcp, methods=["GET", "POST"]),
+        Route("/sse", endpoint=handle_sse),
+        Mount("/messages/", app=sse.handle_post_message),
     ]
 )
 
