@@ -5,7 +5,7 @@ from starlette.applications import Starlette
 from starlette.responses import JSONResponse
 from starlette.routing import Route
 
-# 1. Initialize FastMCP
+# 1. Initialize FastMCP 3.0
 mcp = FastMCP("GeoLocation-APP")
 
 @mcp.tool()
@@ -16,11 +16,11 @@ async def get_my_ip() -> str:
 async def health_check(request):
     return JSONResponse({"status": "healthy", "mcp": "active"})
 
-# 2. Create the MCP app instance first
-# stateless_http=True and path="/" are critical for Copilot Studio
-mcp_app = mcp.http_app(transport="streamable-http", stateless_http=True, path="/")
+# 2. Create the MCP app instance with an EMPTY path string
+# This forces the protocol endpoints to live at /tools and /tools/call
+mcp_app = mcp.http_app(transport="http", stateless=True, path="")
 
-# 3. Use the MCP app's own lifespan for the Starlette parent
+# 3. Parent Starlette App
 app = Starlette(
     lifespan=mcp_app.lifespan, 
     routes=[
