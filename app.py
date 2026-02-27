@@ -1,12 +1,11 @@
 import os
 import uvicorn
-import contextlib
 from fastmcp import FastMCP
 from starlette.applications import Starlette
 from starlette.responses import JSONResponse
 from starlette.routing import Route
 
-# 1. Initialize FastMCP 3.0
+# 1. Initialize FastMCP
 mcp = FastMCP("GeoLocation-APP")
 
 @mcp.tool()
@@ -15,26 +14,22 @@ async def get_my_ip() -> str:
     return "Successfully connected to Railway MCP server using FastMCP 3.0."
 
 async def health_check(request):
-    """Health check for Railway monitoring."""
     return JSONResponse({"status": "healthy", "mcp": "active"})
 
-# 2. Wrapper to handle the Starlette app argument for lifespan
-@contextlib.asynccontextmanager
-async def lifespan_wrapper(app: Starlette):
-    async with mcp.lifespan():
-        yield
+# 2. Create the MCP app instance first
+# stateless_http=True and path="/" are critical for Copilot Studio
+mcp_app = mcp.http_app(transport="streamable-http", stateless_http=True, path="/")
 
+# 3. Use the MCP app's own lifespan for the Starlette parent
 app = Starlette(
-    lifespan=lifespan_wrapper, 
+    lifespan=mcp_app.lifespan, 
     routes=[
         Route("/", endpoint=health_check),
     ],
 )
 
-# 3. CRITICAL: Pass path="/" to ensure /tools and /tools/call are at the root
-# transport="http" is required for Copilot Studio
-mcp_handler = mcp.http_app(transport="http", path="/") 
-app.mount("/", mcp_handler)
+# 4. Mount the MCP app at the root
+app.mount("/", mcp_app)
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
