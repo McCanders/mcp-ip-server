@@ -49,28 +49,3 @@ starlette_app = Starlette(
 
 if __name__ == "__main__":
     uvicorn.run(starlette_app, host="0.0.0.0", port=8000)
-```
-- Click **"Commit new file"** ✅
-
----
-
-**3. Create `requirements.txt`:**
-- Click **"Add file"** → **"Create new file"**
-- Name it `requirements.txt`
-- Paste:
-```
-mcp
-uvicorn
-starlette
-httpx
-```
-- Click **"Commit new file"** ✅
-
----
-
-**4. Create `Procfile`:**
-- Click **"Add file"** → **"Create new file"**
-- Name it `Procfile` (no extension!)
-- Paste:
-```
-web: uvicorn mcp_ip_server:starlette_app --host 0.0.0.0 --port $PORT
