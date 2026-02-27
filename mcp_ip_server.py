@@ -1,42 +1,19 @@
 import os
 from fastmcp import FastMCP
 from starlette.applications import Starlette
-from starlette.responses import JSONResponse
-from starlette.routing import Route
-from starlette.middleware import Middleware
-from starlette.middleware.cors import CORSMiddleware
+from starlette.routing import Mount
 import uvicorn
-import contextlib
 
-# 1. Initialize FastMCP in stateless HTTP mode (required for cloud hosting)
-mcp = FastMCP("IP-Server", stateless_http=True)
+# Ensure stateless_http is True for Copilot Studio
+mcp = FastMCP("GeoLocation-APP", stateless_http=True)
 
-# 2. Define your tool
 @mcp.tool()
-async def get_my_ip(request_context=None) -> str:
-    """Returns the caller's IP address detected by the server."""
-    # Note: In a cloud environment like Railway, the IP is often in the headers
-    return "Tool executed. Check your Copilot logs for connection details."
+async def get_my_ip() -> str:
+    """Returns a simple success message to verify connectivity."""
+    return "Connection Successful: MCP Tool invoked by Copilot Studio."
 
-# 3. Create a health check for Railway
-async def health_check(request):
-    return JSONResponse({"status": "healthy", "mcp": "active"})
-
-# 4. Wrap FastMCP in a Starlette app for production deployment
-@contextlib.asynccontextmanager
-async def lifespan(app: Starlette):
-    async with mcp.session_manager.run():
-        yield
-
-# Create the final app
-app = Starlette(
-    lifespan=lifespan,
-    routes=[
-        Route("/", endpoint=health_check),
-    ],
-)
-
-# Mount the MCP endpoints (/tools, /tools/call, etc.)
+# Create the app and mount the streamable_http handler
+app = Starlette()
 app.mount("/", mcp.streamable_http_app())
 
 if __name__ == "__main__":
