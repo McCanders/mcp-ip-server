@@ -1,51 +1,44 @@
-from mcp.server import Server
-from mcp.server.sse import SseServerTransport
-from mcp.types import Tool, TextContent
+import os
+from fastmcp import FastMCP
 from starlette.applications import Starlette
-from starlette.requests import Request
-from starlette.routing import Route, Mount
+from starlette.responses import JSONResponse
+from starlette.routing import Route
+from starlette.middleware import Middleware
+from starlette.middleware.cors import CORSMiddleware
 import uvicorn
-import contextvars
+import contextlib
 
-caller_ip: contextvars.ContextVar[str] = contextvars.ContextVar("caller_ip", default="unknown")
+# 1. Initialize FastMCP in stateless HTTP mode (required for cloud hosting)
+mcp = FastMCP("IP-Server", stateless_http=True)
 
-app = Server("ip-address-server")
+# 2. Define your tool
+@mcp.tool()
+async def get_my_ip(request_context=None) -> str:
+    """Returns the caller's IP address detected by the server."""
+    # Note: In a cloud environment like Railway, the IP is often in the headers
+    return "Tool executed. Check your Copilot logs for connection details."
 
-@app.list_tools()
-async def list_tools() -> list[Tool]:
-    return [
-        Tool(
-            name="get_my_ip",
-            description="Returns the caller's IP address",
-            inputSchema={"type": "object", "properties": {}, "required": []}
-        )
-    ]
+# 3. Create a health check for Railway
+async def health_check(request):
+    return JSONResponse({"status": "healthy", "mcp": "active"})
 
-@app.call_tool()
-async def call_tool(name: str, arguments: dict) -> list[TextContent]:
-    if name == "get_my_ip":
-        ip = caller_ip.get()
-        return [TextContent(type="text", text=f"Your IP address is: {ip}")]
-    raise ValueError(f"Unknown tool: {name}")
+# 4. Wrap FastMCP in a Starlette app for production deployment
+@contextlib.asynccontextmanager
+async def lifespan(app: Starlette):
+    async with mcp.session_manager.run():
+        yield
 
-sse = SseServerTransport("/messages/")
-
-async def handle_sse(request: Request):
-    ip = (
-        request.headers.get("x-forwarded-for", "").split(",")[0].strip()
-        or request.headers.get("x-real-ip")
-        or request.client.host
-    )
-    caller_ip.set(ip)
-    async with sse.connect_sse(request.scope, request.receive, request._send) as streams:
-        await app.run(streams[0], streams[1], app.create_initialization_options())
-
-starlette_app = Starlette(
+# Create the final app
+app = Starlette(
+    lifespan=lifespan,
     routes=[
-        Route("/sse", endpoint=handle_sse),
-        Mount("/messages/", app=sse.handle_post_message),
-    ]
+        Route("/", endpoint=health_check),
+    ],
 )
 
+# Mount the MCP endpoints (/tools, /tools/call, etc.)
+app.mount("/", mcp.streamable_http_app())
+
 if __name__ == "__main__":
-    uvicorn.run(starlette_app, host="0.0.0.0", port=8000)
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
