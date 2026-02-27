@@ -15,17 +15,15 @@ async def get_my_ip() -> str:
     return "Successfully connected to Railway MCP server using FastMCP 3.0."
 
 async def health_check(request):
-    """Basic health check for Railway monitoring."""
+    """Health check for Railway to see the app is live."""
     return JSONResponse({"status": "healthy", "mcp": "active"})
 
-# 2. Custom lifespan wrapper to fix the 'AggregateProvider.lifespan()' TypeError
+# 2. Wrapper to fix the 'AggregateProvider.lifespan()' error
 @contextlib.asynccontextmanager
 async def lifespan_wrapper(app: Starlette):
-    # This calls the MCP lifespan without passing the 'app' argument it doesn't want
     async with mcp.lifespan():
         yield
 
-# 3. Use the wrapper here
 app = Starlette(
     lifespan=lifespan_wrapper, 
     routes=[
@@ -33,7 +31,8 @@ app = Starlette(
     ],
 )
 
-# 4. Mount the HTTP app (stateless by default in v3.0)
+# 3. Mount using the correct v3.0 method
+# transport="http" is mandatory for Copilot Studio
 app.mount("/", mcp.http_app(transport="http"))
 
 if __name__ == "__main__":
