@@ -1,5 +1,4 @@
 import os
-import contextlib
 import uvicorn
 from fastmcp import FastMCP
 from starlette.applications import Starlette
@@ -15,25 +14,21 @@ async def get_my_ip() -> str:
     return "Successfully connected to Railway MCP server using FastMCP 3.0."
 
 async def health_check(request):
+    """Basic health check for Railway monitoring."""
     return JSONResponse({"status": "healthy", "mcp": "active"})
 
-@contextlib.asynccontextmanager
-async def lifespan(app: Starlette):
-    # Required for v3.0 to initialize tools and providers
-    async with mcp.session_manager.run():
-        yield
-
+# 2. Use the built-in mcp.lifespan in the Starlette constructor
 app = Starlette(
-    lifespan=lifespan,
+    lifespan=mcp.lifespan, 
     routes=[
         Route("/", endpoint=health_check),
     ],
 )
 
-# 2. In v3.0, simply use transport="http". It is stateless by default.
-mcp_handler = mcp.http_app(transport="http")
-app.mount("/", mcp_handler)
+# 3. Mount the HTTP app (stateless by default in v3.0)
+app.mount("/", mcp.http_app(transport="http"))
 
 if __name__ == "__main__":
+    # Railway provides the port via an environment variable
     port = int(os.environ.get("PORT", 8000))
     uvicorn.run(app, host="0.0.0.0", port=port)
