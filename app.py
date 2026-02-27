@@ -1,5 +1,6 @@
 import os
 import uvicorn
+import contextlib
 from fastmcp import FastMCP
 from starlette.applications import Starlette
 from starlette.responses import JSONResponse
@@ -17,18 +18,24 @@ async def health_check(request):
     """Basic health check for Railway monitoring."""
     return JSONResponse({"status": "healthy", "mcp": "active"})
 
-# 2. Use the built-in mcp.lifespan in the Starlette constructor
+# 2. Custom lifespan wrapper to fix the 'AggregateProvider.lifespan()' TypeError
+@contextlib.asynccontextmanager
+async def lifespan_wrapper(app: Starlette):
+    # This calls the MCP lifespan without passing the 'app' argument it doesn't want
+    async with mcp.lifespan():
+        yield
+
+# 3. Use the wrapper here
 app = Starlette(
-    lifespan=mcp.lifespan, 
+    lifespan=lifespan_wrapper, 
     routes=[
         Route("/", endpoint=health_check),
     ],
 )
 
-# 3. Mount the HTTP app (stateless by default in v3.0)
+# 4. Mount the HTTP app (stateless by default in v3.0)
 app.mount("/", mcp.http_app(transport="http"))
 
 if __name__ == "__main__":
-    # Railway provides the port via an environment variable
     port = int(os.environ.get("PORT", 8000))
     uvicorn.run(app, host="0.0.0.0", port=port)
